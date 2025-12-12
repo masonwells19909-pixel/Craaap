@@ -22,7 +22,10 @@ export const translations = {
     amount: 'المبلغ',
     submit: 'تأكيد',
     invite_friends: 'دعوة الأصدقاء',
-    your_code: 'كود الدعوة الخاص بك',
+    your_code: 'رابط الدعوة الخاص بك', // Changed
+    copy_link: 'نسخ الرابط', // Added
+    share_link: 'مشاركة الرابط', // Added
+    link_copied: 'تم نسخ الرابط!', // Added
     total_earnings: 'إجمالي الأرباح',
     friends_invited: 'الأصدقاء المدعوين',
     locked: 'مغلق',
@@ -68,7 +71,10 @@ export const translations = {
     amount: 'Amount',
     submit: 'Submit',
     invite_friends: 'Invite Friends',
-    your_code: 'Your Referral Code',
+    your_code: 'Your Invite Link', // Changed
+    copy_link: 'Copy Link', // Added
+    share_link: 'Share Link', // Added
+    link_copied: 'Link Copied!', // Added
     total_earnings: 'Total Earnings',
     friends_invited: 'Friends Invited',
     locked: 'Locked',
@@ -114,7 +120,10 @@ export const translations = {
     amount: 'Сумма',
     submit: 'Отправить',
     invite_friends: 'Пригласить друзей',
-    your_code: 'Ваш код',
+    your_code: 'Ваша ссылка', // Changed
+    copy_link: 'Копировать', // Added
+    share_link: 'Поделиться', // Added
+    link_copied: 'Ссылка скопирована!', // Added
     total_earnings: 'Общий доход',
     friends_invited: 'Приглашено друзей',
     locked: 'Закрыто',

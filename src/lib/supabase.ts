@@ -15,6 +15,7 @@ export type Profile = {
   balance: number;
   ads_watched: number;
   ads_watched_today: number;
+  last_ad_reset_date?: string; // Added field for robust daily reset tracking
   vip_level: number;
   mining_unlocked: boolean;
   mining_deposit: number;

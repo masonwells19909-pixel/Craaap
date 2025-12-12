@@ -11,7 +11,121 @@
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
-    <!-- Monetag SDK (Added as requested) -->
+    <!-- FIX: Ultimate Polyfill for CloudStorage (Silent & Robust) -->
+    <script>
+      (function() {
+        try {
+          if (window.Telegram && window.Telegram.WebApp) {
+            // console.log('[Polyfill] Initializing robust CloudStorage patch...');
+            var originalWebApp = window.Telegram.WebApp;
+            
+            // 1. Create Safe Storage Mock
+            var safeLocalStorage = {
+              getItem: function(k) { try { return window.localStorage.getItem(k); } catch(e){ return null; } },
+              setItem: function(k, v) { try { window.localStorage.setItem(k, v); } catch(e){} },
+              removeItem: function(k) { try { window.localStorage.removeItem(k); } catch(e){} },
+              keys: function() { try { return Object.keys(window.localStorage); } catch(e){ return []; } }
+            };
+
+            var mockStorage = {
+              setItem: function(key, value, cb) { 
+                safeLocalStorage.setItem(key, value); 
+                if(cb) cb(null, true); 
+              },
+              getItem: function(key, cb) { 
+                var val = safeLocalStorage.getItem(key); 
+                if(cb) cb(null, val); 
+                return val; 
+              },
+              getItems: function(keys, cb) { 
+                var vals = {}; 
+                keys.forEach(function(k){ vals[k] = safeLocalStorage.getItem(k) }); 
+                if(cb) cb(null, vals); 
+                return vals; 
+              },
+              removeItem: function(key, cb) { 
+                safeLocalStorage.removeItem(key); 
+                if(cb) cb(null, true); 
+              },
+              removeItems: function(keys, cb) { 
+                keys.forEach(function(k){ safeLocalStorage.removeItem(k) }); 
+                if(cb) cb(null, true); 
+              },
+              getKeys: function(cb) { 
+                var keys = safeLocalStorage.keys(); 
+                if(cb) cb(null, keys); 
+                return keys; 
+              }
+            };
+
+            // 2. Apply Patch using multiple strategies
+            var patched = false;
+
+            // Strategy A: Try standard redefinition (Check descriptor first to avoid TypeError logs)
+            var descriptor = Object.getOwnPropertyDescriptor(originalWebApp, 'CloudStorage');
+            if (!descriptor || descriptor.configurable) {
+                try {
+                    Object.defineProperty(originalWebApp, 'CloudStorage', {
+                        value: mockStorage,
+                        writable: true,
+                        configurable: true
+                    });
+                    patched = true;
+                    // console.log('[Polyfill] Strategy A success.');
+                } catch (e) {
+                    // Silent fail
+                }
+            }
+
+            // Strategy B: Mutate existing object methods (if A failed)
+            if (!patched) {
+                try {
+                    if (originalWebApp.CloudStorage) {
+                        originalWebApp.CloudStorage.setItem = mockStorage.setItem;
+                        originalWebApp.CloudStorage.getItem = mockStorage.getItem;
+                        originalWebApp.CloudStorage.getItems = mockStorage.getItems;
+                        originalWebApp.CloudStorage.removeItem = mockStorage.removeItem;
+                        originalWebApp.CloudStorage.removeItems = mockStorage.removeItems;
+                        originalWebApp.CloudStorage.getKeys = mockStorage.getKeys;
+                        patched = true;
+                        // console.log('[Polyfill] Strategy B success.');
+                    }
+                } catch (e) {
+                    // Silent fail
+                }
+            }
+
+            // Strategy C: Proxy Wrapper (The "Nuclear" Option)
+            if (!patched && typeof Proxy !== 'undefined') {
+                try {
+                    var proxyWebApp = new Proxy(originalWebApp, {
+                        get: function(target, prop) {
+                            if (prop === 'CloudStorage') {
+                                return mockStorage;
+                            }
+                            var value = target[prop];
+                            if (typeof value === 'function') {
+                                return value.bind(target);
+                            }
+                            return value;
+                        }
+                    });
+                    
+                    window.Telegram.WebApp = proxyWebApp;
+                    patched = true;
+                    // console.log('[Polyfill] Strategy C success.');
+                } catch (e) {
+                    console.error('[Polyfill] All strategies failed:', e);
+                }
+            }
+          }
+        } catch (e) {
+          console.error('[Polyfill] Script error:', e);
+        }
+      })();
+    </script>
+    
+    <!-- Monetag SDK -->
     <script src='//libtl.com/sdk.js' data-zone='10310779' data-sdk='show_10310779'></script>
   </head>
   <body class="bg-black text-white overflow-hidden">

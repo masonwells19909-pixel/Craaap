@@ -38,7 +38,8 @@ export interface TelegramWebApp {
   ready: () => void;
   expand: () => void;
   close: () => void;
-  openLink: (url: string, options?: { try_instant_view?: boolean }) => void; // Added openLink
+  openLink: (url: string, options?: { try_instant_view?: boolean }) => void;
+  openTelegramLink: (url: string) => void; // Added for native sharing
   setHeaderColor: (color: string) => void;
   setBackgroundColor: (color: string) => void;
   

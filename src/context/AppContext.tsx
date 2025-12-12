@@ -57,7 +57,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
                .eq('id', user.id)
                .single();
              if (retryData) {
-               setProfile(retryData);
+               handleProfileData(retryData);
                return;
              }
            } else {
@@ -71,13 +71,24 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (data) {
-        setProfile(data);
+        handleProfileData(data);
       }
     } catch (err: unknown) {
       console.error('Error refreshing profile:', err);
       const message = err instanceof Error ? err.message : 'Connection Error';
       setError(message);
     }
+  };
+
+  // Helper to handle profile data and visual resets
+  const handleProfileData = (data: Profile) => {
+    // Client-side check: If the stored reset date is not today, visually reset the counter
+    // This ensures the UI looks correct even before the user watches their first ad of the day
+    const today = new Date().toISOString().split('T')[0];
+    if (data.last_ad_reset_date && data.last_ad_reset_date !== today) {
+        data.ads_watched_today = 0;
+    }
+    setProfile(data);
   };
 
   useEffect(() => {
