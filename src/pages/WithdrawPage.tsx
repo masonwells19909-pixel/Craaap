@@ -43,8 +43,9 @@ export const WithdrawPage = () => {
       setAmount('');
       setAddress('');
       refreshProfile();
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || t('error') });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('error');
+      setMessage({ type: 'error', text: msg });
     } finally {
       setLoading(false);
     }

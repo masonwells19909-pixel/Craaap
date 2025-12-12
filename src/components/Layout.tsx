@@ -2,15 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { useTelegram } from '../hooks/useTelegram';
-import { Tv, Pickaxe, Crown, Users, Wallet, Globe, Loader2, AlertTriangle, RefreshCw, Power, Trash2 } from 'lucide-react';
+import { Tv, Pickaxe, Crown, Users, Wallet, Globe, Loader2, AlertTriangle, RefreshCw, Power, Trash2, Settings, Smartphone, ShieldAlert } from 'lucide-react';
 import { clsx } from 'clsx';
 import { supabase } from '../lib/supabase';
+import { Language } from '../lib/translations';
 
 export const Layout = () => {
   const { user, profile, loading, error, t, language, setLanguage, logout } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
-  const { tg, isReady } = useTelegram();
+  const { tg } = useTelegram();
   const [showTimeout, setShowTimeout] = useState(false);
 
   // Telegram Integration & Expansion & Language Detection
@@ -38,7 +39,7 @@ export const Layout = () => {
 
   // Loading Timeout Handler
   useEffect(() => {
-    let timer: any;
+    let timer: ReturnType<typeof setTimeout>;
     if (loading) {
       timer = setTimeout(() => {
         setShowTimeout(true);
@@ -64,7 +65,7 @@ export const Layout = () => {
                 Crypto Miner
             </h2>
             <p className="text-sm text-gray-300 animate-pulse font-medium">
-                {language === 'ar' ? 'جاري تجهيز التطبيق...' : 'Setting up App...'}
+                {language === 'ar' ? 'جاري الدخول تلقائياً...' : 'Logging in...'}
             </p>
         </div>
 
@@ -154,7 +155,7 @@ export const Layout = () => {
             <Globe size={14} className="text-gray-400" />
             <select 
               value={language} 
-              onChange={(e) => setLanguage(e.target.value as any)}
+              onChange={(e) => setLanguage(e.target.value as Language)}
               className="bg-transparent text-xs text-gray-300 outline-none border-none cursor-pointer appearance-none pr-2 font-medium"
             >
               <option value="ar" className="bg-gray-900">العربية</option>
@@ -198,27 +199,28 @@ export const Layout = () => {
 
 const AuthScreen = () => {
   const { tg, startParam } = useTelegram();
-  const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [referralCode, setReferralCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rawError, setRawError] = useState(''); // Store the actual raw error
   const [status, setStatus] = useState(''); 
-  const { t, language } = useApp();
+  const { language } = useApp();
 
-  // Detect if we are inside Telegram (checking initDataUnsafe.user existence)
-  const isTelegramUser = !!tg?.initDataUnsafe?.user;
+  // Detect if we are inside Telegram OR in Simulation Mode
+  const [isSimulating, setIsSimulating] = useState(false);
+  // Allow custom ID for simulation to bypass stuck users
+  const [simId, setSimId] = useState(123456789);
+  
+  const isTelegramUser = !!tg?.initDataUnsafe?.user || isSimulating;
 
   useEffect(() => {
     if (isTelegramUser) {
       handleTelegramAutoLogin();
     }
-  }, [isTelegramUser]);
+  }, [isTelegramUser, simId]);
 
   const handleTelegramAutoLogin = async (retryCount = 0) => {
     setLoading(true);
-    const isAr = tg?.initDataUnsafe?.user?.language_code === 'ar';
+    const isAr = language === 'ar';
     
     if (retryCount > 0) {
         setStatus(isAr ? `محاولة الاتصال (${retryCount})...` : `Retrying connection (${retryCount})...`);
@@ -227,21 +229,27 @@ const AuthScreen = () => {
     }
     
     setError('');
+    setRawError('');
     
     try {
-      const tgUser = tg!.initDataUnsafe.user!;
+      // Use real TG user or Mock user for simulation
+      const tgUser = isSimulating 
+        ? { id: simId, first_name: 'Test', last_name: 'User' } 
+        : tg!.initDataUnsafe.user!;
       
       // Force cleanup of any stale session first if this is the first attempt
       if (retryCount === 0) {
+        // We check against the NEW email format (V3)
+        const derivedEmail = `u${tgUser.id}_v3@tm.app`;
         const { data: { session } } = await supabase.auth.getSession();
-        const derivedEmail = `${tgUser.id}@telegram.miniapp.com`;
         if (session && session.user.email !== derivedEmail) {
             await supabase.auth.signOut();
         }
       }
 
-      const dummyEmail = `${tgUser.id}@telegram.miniapp.com`;
-      const dummyPassword = `tg_pass_${tgUser.id}_secure_hash`; 
+      // NEW EMAIL FORMAT TO BYPASS STUCK USERS (V3 Strategy)
+      const dummyEmail = `u${tgUser.id}_v3@tm.app`;
+      const dummyPassword = `tg_pass_${tgUser.id}_secure_hash_v3`; 
 
       // 1. Try to Sign In
       const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -266,11 +274,8 @@ const AuthScreen = () => {
              });
              
              if (signUpError) {
-                 // If user exists but login failed, it might be a race condition or password issue.
-                 // We can't reset password easily without email.
-                 // But if "User already registered" happens here, it means signIn failed but signUp says user exists.
-                 // This implies password mismatch or auth provider issue.
                  if (signUpError.message.includes('User already registered')) {
+                     // If registered but login failed, it might be a race condition or stale state
                      if (retryCount < 2) {
                         setTimeout(() => handleTelegramAutoLogin(retryCount + 1), 1500);
                         return;
@@ -282,14 +287,36 @@ const AuthScreen = () => {
             throw signInError;
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Telegram Auth Error:', err);
-      let msg = err.message || 'Login Failed';
+      let msg = err instanceof Error ? err.message : 'Login Failed';
+      setRawError(msg); // Save raw error for display
       
       // Translate common errors
       if (msg.includes('Database error')) msg = language === 'ar' ? 'خطأ في قاعدة البيانات' : 'Database error';
       if (msg.includes('Failed to fetch')) msg = language === 'ar' ? 'فشل الاتصال بالخادم' : 'Connection failed';
       if (msg.includes('User already registered')) msg = language === 'ar' ? 'المستخدم مسجل بالفعل (حاول مرة أخرى)' : 'User already registered';
+      
+      // Specific handling for disabled signups
+      if (msg.includes('Signups not allowed')) {
+        msg = language === 'ar' 
+            ? 'تنبيه للمطور: يجب تفعيل خيار "Allow new users to sign up" في إعدادات Supabase.' 
+            : 'Dev Error: Enable "Allow new users to sign up" in Supabase.';
+      }
+
+      // Specific handling for disabled email provider
+      if (msg.includes('Email logins are disabled') || msg.includes('provider is disabled')) {
+         msg = language === 'ar'
+            ? 'تنبيه للمطور: يجب تفعيل خيار "Email Provider" في إعدادات Supabase (المفتاح الأول).'
+            : 'Dev Error: Enable "Email Provider" in Supabase settings (The first toggle).';
+      }
+
+      // Specific handling for Unconfirmed Email (Stale User)
+      if (msg.includes('Email not confirmed')) {
+          msg = language === 'ar' 
+            ? 'الحساب معلق (غير مفعل). يرجى حذف المستخدم من لوحة تحكم Supabase والمحاولة مجدداً.'
+            : 'Account unconfirmed. Please delete user from Supabase Dashboard and retry.';
+      }
 
       setError(msg);
       setStatus('');
@@ -298,32 +325,7 @@ const AuthScreen = () => {
     }
   };
 
-  const handleManualAuth = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    
-    try {
-      if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signUp({ 
-          email, 
-          password,
-          options: {
-            data: { referral_code: referralCode }
-          }
-        });
-        if (error) throw error;
-      }
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // If inside Telegram or Simulating, show Loading/Error Screen ONLY (No Form)
   if (isTelegramUser) {
     return (
       <div className="min-h-[100dvh] bg-black flex flex-col items-center justify-center text-white p-6 relative overflow-hidden">
@@ -347,26 +349,38 @@ const AuthScreen = () => {
              
              {error && (
                <div className="bg-red-900/20 border border-red-500/30 text-red-200 p-4 rounded-xl text-sm flex flex-col items-center gap-2 animate-[shake_0.5s_ease-in-out]">
-                 <AlertTriangle size={24} className="text-red-500" />
-                 <span className="font-bold">{language === 'ar' ? 'حدث خطأ' : 'Error'}</span>
-                 <p className="text-xs opacity-80 text-center leading-relaxed">{error}</p>
+                 <ShieldAlert size={28} className="text-red-500" />
+                 <span className="font-bold text-base">{language === 'ar' ? 'خطأ في الإعدادات' : 'Configuration Error'}</span>
+                 <p className="text-xs opacity-90 text-center leading-relaxed font-medium">{error}</p>
                  
-                 <div className="flex gap-2 mt-2 w-full">
+                 {/* Raw Error Display for Debugging */}
+                 <div className="w-full bg-black/40 p-2 rounded text-[10px] font-mono text-left text-red-300 overflow-x-auto mt-2 border border-red-500/20">
+                    <span className="font-bold block mb-1 text-gray-400">Raw Error from Supabase:</span>
+                    {rawError}
+                 </div>
+
+                 <div className="flex flex-col gap-2 mt-4 w-full">
                     <button 
-                        onClick={() => handleTelegramAutoLogin()}
-                        className="flex-1 bg-red-500/20 hover:bg-red-500/30 text-red-200 px-3 py-2 rounded-lg text-xs transition-colors"
+                        onClick={() => {
+                            setLoading(true);
+                            setError('');
+                            handleTelegramAutoLogin();
+                        }}
+                        className="w-full bg-white/10 hover:bg-white/20 text-white px-3 py-3 rounded-lg text-xs transition-colors font-bold"
                     >
-                        {language === 'ar' ? 'إعادة المحاولة' : 'Retry'}
+                        {language === 'ar' ? 'إعادة المحاولة الآن' : 'Retry Now'}
                     </button>
+
                     <button 
                         onClick={async () => {
                             await supabase.auth.signOut();
+                            localStorage.clear();
                             window.location.reload();
                         }}
-                        className="flex-1 bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1"
+                        className="w-full bg-red-500/20 hover:bg-red-500/30 text-red-200 px-3 py-3 rounded-lg text-xs transition-colors font-medium flex items-center justify-center gap-2"
                     >
-                        <Trash2 size={12} />
-                        {language === 'ar' ? 'تنظيف' : 'Clear'}
+                        <Trash2 size={14} />
+                        {language === 'ar' ? 'حذف البيانات وإعادة التشغيل' : 'Hard Reset & Reload'}
                     </button>
                  </div>
                </div>
@@ -385,75 +399,48 @@ const AuthScreen = () => {
          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full h-[250px] bg-red-600/20 blur-[100px] rounded-t-full"></div>
       </div>
 
-      <div className="z-10 w-full max-w-md bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl">
-        <div className="text-center mb-8">
+      <div className="z-10 w-full max-w-md bg-white/5 backdrop-blur-xl p-8 rounded-3xl border border-white/10 shadow-2xl text-center">
+        <div className="mb-8">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
             Crypto Miner
             </h1>
-            <p className="text-xs text-gray-500 mt-2 uppercase tracking-widest border border-white/10 inline-block px-2 py-1 rounded">Dev Mode / Browser</p>
+            <p className="text-xs text-gray-500 mt-2 uppercase tracking-widest border border-white/10 inline-block px-2 py-1 rounded">
+                {language === 'ar' ? 'وضع المتصفح / المطور' : 'Browser / Dev Mode'}
+            </p>
         </div>
         
-        <div className="flex gap-4 mb-6 p-1 bg-black/40 rounded-xl">
-          <button 
-            onClick={() => setIsLogin(true)}
-            className={clsx("flex-1 py-2 rounded-lg text-sm font-medium transition-all", isLogin ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-gray-200")}
-          >
-            {t('login')}
-          </button>
-          <button 
-            onClick={() => setIsLogin(false)}
-            className={clsx("flex-1 py-2 rounded-lg text-sm font-medium transition-all", !isLogin ? "bg-white/10 text-white shadow-sm" : "text-gray-400 hover:text-gray-200")}
-          >
-            {t('signup')}
-          </button>
-        </div>
+        <div className="space-y-4">
+            <p className="text-sm text-gray-300 leading-relaxed">
+                {language === 'ar' 
+                    ? 'هذا التطبيق مصمم للعمل داخل تيليجرام. في المتصفح، يمكنك محاكاة تجربة الدخول التلقائي.' 
+                    : 'This app is designed for Telegram. In browser, you can simulate the auto-login experience.'}
+            </p>
 
-        <form onSubmit={handleManualAuth} className="space-y-4">
-          <div>
-            <label className="block text-xs text-gray-400 mb-1 ml-1">{t('email')}</label>
-            <input 
-              type="email" 
-              required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white focus:border-cyan-500 outline-none transition-all"
-              placeholder="name@example.com"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1 ml-1">{t('password')}</label>
-            <input 
-              type="password" 
-              required
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white focus:border-cyan-500 outline-none transition-all"
-              placeholder="••••••••"
-            />
-          </div>
+            <button 
+                onClick={() => setIsSimulating(true)}
+                className="w-full bg-[#229ED9] hover:bg-[#1e8cc2] text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-500/20 transition-all active:scale-95 flex items-center justify-center gap-3"
+            >
+                <Smartphone size={20} />
+                {language === 'ar' ? 'محاكاة الدخول عبر تيليجرام' : 'Simulate Telegram Login'}
+            </button>
 
-          {!isLogin && (
-            <div>
-              <label className="block text-xs text-gray-400 mb-1 ml-1">Referral Code</label>
-              <input 
-                type="text" 
-                value={referralCode}
-                onChange={e => setReferralCode(e.target.value)}
-                className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white focus:border-cyan-500 outline-none transition-all"
-                placeholder="Optional"
-              />
+            <div className="pt-4 border-t border-white/5">
+                <p className="text-[10px] text-gray-500 mb-2">
+                    {language === 'ar' ? 'أدوات المطور' : 'Developer Tools'}
+                </p>
+                <button 
+                    onClick={async () => {
+                        await supabase.auth.signOut();
+                        localStorage.clear();
+                        window.location.reload();
+                    }}
+                    className="flex items-center justify-center gap-2 w-full py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-xs transition-colors"
+                >
+                    <Trash2 size={14} />
+                    {language === 'ar' ? 'مسح البيانات المحلية' : 'Clear Local Data'}
+                </button>
             </div>
-          )}
-
-          {error && <p className="text-red-400 text-xs text-center bg-red-500/10 p-2 rounded-lg">{error}</p>}
-
-          <button 
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-cyan-500/20 transition-all disabled:opacity-50 mt-4"
-          >
-            {loading ? '...' : (isLogin ? t('login') : t('signup'))}
-          </button>
-        </form>
+        </div>
       </div>
     </div>
   );

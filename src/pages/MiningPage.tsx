@@ -41,8 +41,9 @@ export const MiningPage = () => {
         haptic.notification('success');
         setDepositAmount('');
         await refreshProfile();
-    } catch (err: any) {
-        setErrorMsg(err.message || 'Deposit failed');
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Deposit failed';
+        setErrorMsg(message);
         haptic.notification('error');
     }
   };
@@ -89,11 +90,13 @@ export const MiningPage = () => {
         if (error) throw error;
         haptic.notification('success');
         await refreshProfile();
-    } catch (err: any) {
-        setErrorMsg(err.message || 'Spin failed');
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Spin failed';
+        setErrorMsg(message);
         haptic.notification('error');
     } finally {
         setSpinning(false);
+        clearInterval(tickInterval); // Ensure interval is cleared
     }
   };
 

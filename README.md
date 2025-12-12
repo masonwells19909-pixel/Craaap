@@ -15,7 +15,11 @@ This is a complete Telegram Mini App for Crypto Mining, built with React, Tailwi
 
 ### 1. Supabase Setup
 The project uses Supabase for the backend. Ensure you have applied all migration scripts provided in the development process.
-- **Auth**: Disable "Confirm Email" in Authentication -> Providers -> Email.
+- **Auth**: 
+    - Go to Authentication -> Providers -> Email.
+    - **ENABLE** "Enable Email Provider".
+    - **ENABLE** "Allow new users to sign up" (Critical for Telegram Auto-Login).
+    - **DISABLE** "Confirm Email" (To allow instant login).
 - **Database**: Contains `profiles`, `withdrawals`, and secure RPC functions.
 
 ### 2. Deployment (Netlify)
@@ -34,10 +38,12 @@ This project is ready for Netlify.
 4. Paste your Netlify URL when asked for the Web App URL.
 5. Menu Button: You can also set the menu button URL using `/setmenubutton`.
 
+## Troubleshooting
+**Error: "Signups not allowed for this instance"**
+- This means you have disabled "Email Signups" in Supabase. 
+- The app uses a hidden email system (based on Telegram ID) to create accounts securely.
+- **Fix:** Go to Supabase Dashboard -> Authentication -> Providers -> Email -> Enable "Allow new users to sign up".
+
 ## Development
 - `yarn run dev`: Start local server.
 - `yarn build`: Build for production.
-
-## Security
-- All sensitive transactions (Mining, Withdrawals, Ad Rewards) are secured via PostgreSQL RPC functions to prevent frontend manipulation.
-- Row Level Security (RLS) is enabled on all tables.
