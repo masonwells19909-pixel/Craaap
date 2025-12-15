@@ -30,7 +30,6 @@ export const WithdrawPage = () => {
     setMessage({ type: '', text: '' });
 
     try {
-      // Use secure RPC instead of direct insert/update
       const { error } = await supabase.rpc('request_withdrawal', {
         amount: val,
         wallet_addr: address,
@@ -39,12 +38,18 @@ export const WithdrawPage = () => {
 
       if (error) throw error;
 
-      setMessage({ type: 'success', text: 'Withdrawal requested successfully!' });
+      setMessage({ type: 'success', text: t('withdrawal_requested') });
       setAmount('');
       setAddress('');
       refreshProfile();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : t('error');
+    } catch (err: any) {
+      let msg = err instanceof Error ? err.message : t('error');
+      
+      // Translate errors
+      if (msg.includes('Insufficient')) msg = t('insufficient_balance');
+      else if (msg.includes('pending')) msg = t('wait_24h');
+      else msg = t('try_again');
+
       setMessage({ type: 'error', text: msg });
     } finally {
       setLoading(false);
@@ -118,7 +123,7 @@ export const WithdrawPage = () => {
           disabled={loading}
           className="w-full py-4 bg-green-600 hover:bg-green-500 rounded-xl font-bold text-white shadow-lg shadow-green-900/20 transition-all disabled:opacity-50"
         >
-          {loading ? 'Processing...' : t('withdraw_title')}
+          {loading ? t('processing') : t('withdraw_title')}
         </button>
       </form>
     </div>

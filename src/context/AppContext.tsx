@@ -6,6 +6,7 @@ import { User, Session } from '@supabase/supabase-js';
 interface AppContextType {
   user: User | null;
   profile: Profile | null;
+  setProfile: React.Dispatch<React.SetStateAction<Profile | null>>;
   loading: boolean;
   error: string | null;
   language: Language;
@@ -29,14 +30,15 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setProfile(null);
     setLoading(false);
-    // Force reload to clear any in-memory states
     window.location.reload();
   };
 
   const refreshProfile = async () => {
     if (!user) return;
     try {
-      setError(null);
+      // Don't clear error immediately to avoid UI flickering if it was a persistent error
+      // setError(null); 
+      
       const { data, error: fetchError } = await supabase
         .from('profiles')
         .select('*')
@@ -66,26 +68,33 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
              return;
            }
         } else {
+           // If it's a network error (TypeError: Failed to fetch), just log it and don't block the UI if we already have data
+           if (fetchError.message && fetchError.message.includes('fetch')) {
+               console.warn('Network error refreshing profile, keeping old data');
+               return;
+           }
            throw fetchError;
         }
       }
 
       if (data) {
         handleProfileData(data);
+        setError(null); // Clear error on success
       }
     } catch (err: unknown) {
       console.error('Error refreshing profile:', err);
-      const message = err instanceof Error ? err.message : 'Connection Error';
-      setError(message);
+      // Only set global error if we don't have a profile yet (initial load)
+      if (!profile) {
+          const message = err instanceof Error ? err.message : 'Connection Error';
+          setError(message);
+      }
     }
   };
 
-  // Helper to handle profile data and visual resets
   const handleProfileData = (data: Profile) => {
-    // Client-side check: If the stored reset date is not today, visually reset the counter
-    // This ensures the UI looks correct even before the user watches their first ad of the day
     const today = new Date().toISOString().split('T')[0];
-    if (data.last_ad_reset_date && data.last_ad_reset_date !== today) {
+    // Robust check for daily reset
+    if (data.last_ad_reset_date && data.last_ad_reset_date < today) {
         data.ads_watched_today = 0;
     }
     setProfile(data);
@@ -94,7 +103,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let mounted = true;
 
-    // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!mounted) return;
       setUser(session?.user ?? null);
@@ -122,7 +130,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [user]);
 
-  // Set document direction based on language
   useEffect(() => {
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.lang = language;
@@ -133,7 +140,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AppContext.Provider value={{ user, profile, loading, error, language, setLanguage, t, refreshProfile, logout }}>
+    <AppContext.Provider value={{ user, profile, setProfile, loading, error, language, setLanguage, t, refreshProfile, logout }}>
       {children}
     </AppContext.Provider>
   );

@@ -22,10 +22,10 @@ export const translations = {
     amount: 'المبلغ',
     submit: 'تأكيد',
     invite_friends: 'دعوة الأصدقاء',
-    your_code: 'رابط الدعوة الخاص بك', // Changed
-    copy_link: 'نسخ الرابط', // Added
-    share_link: 'مشاركة الرابط', // Added
-    link_copied: 'تم نسخ الرابط!', // Added
+    your_code: 'رابط الدعوة الخاص بك',
+    copy_link: 'نسخ الرابط',
+    share_link: 'مشاركة الرابط',
+    link_copied: 'تم نسخ الرابط!',
     total_earnings: 'إجمالي الأرباح',
     friends_invited: 'الأصدقاء المدعوين',
     locked: 'مغلق',
@@ -49,6 +49,20 @@ export const translations = {
     wait_24h: 'يرجى الانتظار 24 ساعة',
     ad_reward: 'مكافأة الإعلان',
     language: 'اللغة',
+    too_fast: 'يرجى الانتظار قليلاً',
+    try_again: 'حاول مرة أخرى',
+    withdrawal_requested: 'تم طلب السحب بنجاح',
+    processing: 'جاري المعالجة...',
+    session_expired: 'انتهت الجلسة، قم بالتحديث',
+    // New Translations
+    enter_code: 'أدخل كود الدعوة',
+    enter_code_desc: 'لديك كود دعوة من صديق؟ أدخله هنا',
+    code_placeholder: 'مثال: 123456',
+    redeem: 'تفعيل الكود',
+    already_referred: 'لقد تم دعوتك مسبقاً',
+    invalid_code: 'الكود غير صحيح',
+    self_referral: 'لا يمكنك دعوة نفسك',
+    code_redeemed: 'تم تفعيل كود الدعوة بنجاح!',
   },
   en: {
     ads: 'Ads',
@@ -71,10 +85,10 @@ export const translations = {
     amount: 'Amount',
     submit: 'Submit',
     invite_friends: 'Invite Friends',
-    your_code: 'Your Invite Link', // Changed
-    copy_link: 'Copy Link', // Added
-    share_link: 'Share Link', // Added
-    link_copied: 'Link Copied!', // Added
+    your_code: 'Your Invite Link',
+    copy_link: 'Copy Link',
+    share_link: 'Share Link',
+    link_copied: 'Link Copied!',
     total_earnings: 'Total Earnings',
     friends_invited: 'Friends Invited',
     locked: 'Locked',
@@ -98,6 +112,20 @@ export const translations = {
     wait_24h: 'Please wait 24h',
     ad_reward: 'Ad Reward',
     language: 'Language',
+    too_fast: 'Please wait a moment',
+    try_again: 'Try again',
+    withdrawal_requested: 'Withdrawal requested successfully',
+    processing: 'Processing...',
+    session_expired: 'Session expired, refresh page',
+    // New Translations
+    enter_code: 'Enter Referral Code',
+    enter_code_desc: 'Got a code from a friend? Enter it here',
+    code_placeholder: 'Ex: 123456',
+    redeem: 'Redeem Code',
+    already_referred: 'You are already referred',
+    invalid_code: 'Invalid Code',
+    self_referral: 'Cannot refer yourself',
+    code_redeemed: 'Referral code redeemed successfully!',
   },
   ru: {
     ads: 'Реклама',
@@ -120,10 +148,10 @@ export const translations = {
     amount: 'Сумма',
     submit: 'Отправить',
     invite_friends: 'Пригласить друзей',
-    your_code: 'Ваша ссылка', // Changed
-    copy_link: 'Копировать', // Added
-    share_link: 'Поделиться', // Added
-    link_copied: 'Ссылка скопирована!', // Added
+    your_code: 'Ваша ссылка',
+    copy_link: 'Копировать',
+    share_link: 'Поделиться',
+    link_copied: 'Ссылка скопирована!',
     total_earnings: 'Общий доход',
     friends_invited: 'Приглашено друзей',
     locked: 'Закрыто',
@@ -147,5 +175,19 @@ export const translations = {
     wait_24h: 'Подождите 24ч',
     ad_reward: 'Награда за рекламу',
     language: 'Язык',
+    too_fast: 'Подождите немного',
+    try_again: 'Попробуйте снова',
+    withdrawal_requested: 'Запрос на вывод успешен',
+    processing: 'Обработка...',
+    session_expired: 'Сессия истекла, обновите',
+    // New Translations
+    enter_code: 'Введите код',
+    enter_code_desc: 'Есть код от друга? Введите здесь',
+    code_placeholder: 'Пример: 123456',
+    redeem: 'Активировать',
+    already_referred: 'Вы уже приглашены',
+    invalid_code: 'Неверный код',
+    self_referral: 'Нельзя пригласить себя',
+    code_redeemed: 'Код успешно активирован!',
   }
 };

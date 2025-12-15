@@ -1,19 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { supabase, ReferralUser } from '../lib/supabase';
-import { Users, Copy, UserPlus, Calendar, AlertCircle, Share2, Link as LinkIcon, Check, RefreshCw } from 'lucide-react';
+import { Users, UserPlus, Calendar, AlertCircle, Check, RefreshCw, Hash, ArrowRight } from 'lucide-react';
 import { useTelegram } from '../hooks/useTelegram';
+import { ReferralLinkCard } from '../components/ReferralLinkCard';
 
 export const ReferralPage = () => {
-  const { profile, t } = useApp();
-  const { tg, haptic } = useTelegram();
+  const { profile, t, refreshProfile } = useApp();
+  const { haptic } = useTelegram();
   const [referrals, setReferrals] = useState<ReferralUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  // Get Bot Username from env
-  const BOT_USERNAME = import.meta.env.VITE_BOT_USERNAME || 'Crypto';
+  
+  // Manual Entry States
+  const [inputCode, setInputCode] = useState('');
+  const [redeemLoading, setRedeemLoading] = useState(false);
+  const [redeemMsg, setRedeemMsg] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
   useEffect(() => {
     if (profile) {
@@ -36,90 +38,95 @@ export const ReferralPage = () => {
     }
   };
 
-  if (!profile) return null;
+  const handleRedeemCode = async () => {
+    if (!inputCode.trim()) return;
+    setRedeemLoading(true);
+    setRedeemMsg(null);
+    haptic.impact('light');
 
-  const referralCode = profile.referral_code || '---';
-  
-  // Construct the Mini App Invite Link
-  // Format: https://t.me/BOT_USERNAME/app?startapp=REFERRAL_CODE
-  const inviteLink = `https://t.me/${BOT_USERNAME}/app?startapp=${referralCode}`;
+    try {
+        const { data, error } = await supabase.rpc('redeem_invite', { code_input: inputCode.trim() });
+        
+        if (error) throw error;
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(inviteLink);
-    haptic.selection();
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleShareLink = () => {
-    haptic.impact('medium');
-    const text = `Join me on Crypto Miner and earn rewards! Use my link to start:`;
-    // Using Telegram Share URL
-    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(inviteLink)}&text=${encodeURIComponent(text)}`;
-    
-    if (tg?.openTelegramLink) {
-        tg.openTelegramLink(shareUrl);
-    } else {
-        window.open(shareUrl, '_blank');
+        if (data && data.success) {
+            setRedeemMsg({ type: 'success', text: t('code_redeemed') });
+            haptic.notification('success');
+            setInputCode('');
+            refreshProfile();
+        } else {
+            let msg = t('error');
+            if (data?.message === 'already_referred') msg = t('already_referred');
+            if (data?.message === 'invalid_code') msg = t('invalid_code');
+            if (data?.message === 'self_referral') msg = t('self_referral');
+            setRedeemMsg({ type: 'error', text: msg });
+            haptic.notification('error');
+        }
+    } catch (err) {
+        console.error("Redeem error:", err);
+        setRedeemMsg({ type: 'error', text: t('error') });
+        haptic.notification('error');
+    } finally {
+        setRedeemLoading(false);
     }
   };
 
-  // Safe access to profile properties
+  if (!profile) return null;
+
+  const referralCode = profile.referral_code || profile.id; // Fallback to ID if code is missing
   const earnings = profile.referral_earnings || 0;
+  const isReferred = !!profile.referred_by;
 
   return (
-    <div className="space-y-6 pb-20">
-      {/* Hero Card */}
-      <div className="bg-gradient-to-br from-blue-900 via-indigo-900 to-black rounded-2xl p-6 text-center border border-blue-500/30 shadow-[0_0_30px_rgba(59,130,246,0.2)] relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl -mr-10 -mt-10"></div>
-        
-        <Users size={48} className="mx-auto text-blue-300 mb-4 relative z-10" />
-        <h2 className="text-xl font-bold text-white mb-2 relative z-10">{t('invite_friends')}</h2>
-        <p className="text-sm text-blue-200 mb-6 relative z-10 max-w-[80%] mx-auto">
-          {t('invite_friends')}
-        </p>
-
-        {/* Link Display & Actions */}
-        <div className="space-y-3 relative z-10">
-            {/* Link Box */}
-            <div className="bg-black/40 backdrop-blur-sm rounded-xl p-3 border border-white/10 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 overflow-hidden">
-                    <div className="bg-blue-500/20 p-2 rounded-lg shrink-0">
-                        <LinkIcon size={18} className="text-blue-400" />
-                    </div>
-                    <div className="text-left overflow-hidden w-full">
-                        <p className="text-[10px] text-gray-400 uppercase truncate">{t('your_code')}</p>
-                        <p className="text-sm font-mono text-white truncate w-full opacity-90 select-all">
-                            {inviteLink}
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3">
-                <button 
-                    onClick={handleCopyLink}
-                    className="flex-1 bg-white/10 hover:bg-white/20 border border-white/10 py-3 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
-                >
-                    {copied ? <Check size={18} className="text-green-400" /> : <Copy size={18} className="text-gray-300" />}
-                    <span className={copied ? "text-green-400 font-bold" : "text-gray-200"}>
-                        {copied ? t('link_copied') : t('copy_link')}
-                    </span>
-                </button>
-
-                <button 
-                    onClick={handleShareLink}
-                    className="flex-1 bg-blue-600 hover:bg-blue-500 border border-blue-400/30 py-3 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-900/20"
-                >
-                    <Share2 size={18} className="text-white" />
-                    <span className="text-white font-bold">{t('share_link')}</span>
-                </button>
-            </div>
-        </div>
+    <div className="space-y-6 pb-20 px-5 pt-4">
+      
+      {/* 1. New Referral Link Component */}
+      <div className="animate-fade-in">
+        <ReferralLinkCard referralCode={referralCode} />
       </div>
 
-      {/* Stats Grid */}
+      {/* 2. Manual Code Entry (Only if not referred) */}
+      {!isReferred && (
+          <div className="bg-[#1f2937] border border-yellow-500/20 rounded-2xl p-5 relative overflow-hidden shadow-lg animate-fade-in">
+             <div className="flex items-start gap-4 relative z-10">
+                <div className="bg-yellow-500/10 p-3 rounded-xl shrink-0">
+                    <Hash size={24} className="text-yellow-500" />
+                </div>
+                <div className="flex-1 w-full">
+                    <h3 className="text-white font-bold text-sm mb-1">{t('enter_code')}</h3>
+                    <p className="text-gray-400 text-xs mb-3 leading-relaxed">{t('enter_code_desc')}</p>
+                    
+                    <div className="flex gap-2 w-full">
+                        <input 
+                            type="text" 
+                            inputMode="numeric"
+                            pattern="[0-9]*"
+                            value={inputCode}
+                            onChange={(e) => setInputCode(e.target.value.replace(/[^0-9a-zA-Z]/g, ''))}
+                            placeholder={t('code_placeholder')}
+                            className="flex-1 bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-yellow-500 transition-colors font-mono tracking-widest text-center placeholder:font-sans placeholder:tracking-normal"
+                        />
+                        <button 
+                            onClick={handleRedeemCode}
+                            disabled={redeemLoading || inputCode.length < 3}
+                            className="bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 disabled:grayscale text-black font-bold px-4 rounded-xl text-xs flex items-center justify-center gap-1 transition-all active:scale-95 min-w-[60px]"
+                        >
+                            {redeemLoading ? <RefreshCw size={18} className="animate-spin" /> : <ArrowRight size={20} />}
+                        </button>
+                    </div>
+                    
+                    {redeemMsg && (
+                        <div className={`mt-3 p-2 rounded-lg text-xs font-medium text-center flex items-center justify-center gap-2 ${redeemMsg.type === 'success' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                            {redeemMsg.type === 'success' ? <Check size={14} /> : <AlertCircle size={14} />}
+                            {redeemMsg.text}
+                        </div>
+                    )}
+                </div>
+             </div>
+          </div>
+      )}
+
+      {/* 3. Stats Grid */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white/5 rounded-xl p-4 border border-white/10">
           <p className="text-gray-400 text-xs">{t('friends_invited')}</p>
@@ -131,7 +138,7 @@ export const ReferralPage = () => {
         </div>
       </div>
 
-      {/* Friends List */}
+      {/* 4. Friends List */}
       <div className="mt-8">
         <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
@@ -157,7 +164,6 @@ export const ReferralPage = () => {
           <div className="text-center py-12 text-gray-600 bg-white/5 rounded-xl border border-white/5 border-dashed">
             <Users size={32} className="mx-auto mb-2 opacity-50" />
             <p>No friends invited yet.</p>
-            <p className="text-xs mt-1">Share your link to start earning!</p>
           </div>
         ) : (
           <div className="space-y-3">

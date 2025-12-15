@@ -17,11 +17,9 @@ export const MiningPage = () => {
 
   const isUnlocked = profile.ads_watched >= 10000;
   
-  // 24h Cooldown for Spin
   const canSpin = !profile.last_mining_spin || 
     (new Date().getTime() - new Date(profile.last_mining_spin).getTime() > 24 * 60 * 60 * 1000);
 
-  // 24h Lock for Deposit Withdrawal
   const depositLocked = profile.deposit_date && 
     (new Date().getTime() - new Date(profile.deposit_date).getTime() < 24 * 60 * 60 * 1000);
 
@@ -29,7 +27,7 @@ export const MiningPage = () => {
     setErrorMsg('');
     const amount = parseFloat(depositAmount);
     if (isNaN(amount) || amount < 1 || amount > 10) {
-        setErrorMsg('Amount must be between $1 and $10');
+        setErrorMsg(t('mining_deposit_desc'));
         haptic.notification('error');
         return;
     }
@@ -43,7 +41,9 @@ export const MiningPage = () => {
         await refreshProfile();
     } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Deposit failed';
-        setErrorMsg(message);
+        // Translate common errors
+        if (message.includes('Insufficient')) setErrorMsg(t('insufficient_balance'));
+        else setErrorMsg(t('error'));
         haptic.notification('error');
     }
   };
@@ -56,10 +56,10 @@ export const MiningPage = () => {
       if (error) throw error;
       haptic.notification('success');
       await refreshProfile();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error withdrawing deposit:', err);
       haptic.notification('error');
-      alert('Failed to withdraw deposit. Please try again.');
+      setErrorMsg(t('error'));
     } finally {
       setWithdrawLoading(false);
     }
@@ -72,7 +72,6 @@ export const MiningPage = () => {
     setErrorMsg('');
     haptic.impact('medium');
     
-    // Simulate ticks during spin
     let ticks = 0;
     const tickInterval = setInterval(() => {
         haptic.selection();
@@ -81,22 +80,26 @@ export const MiningPage = () => {
     }, 150);
     
     try {
-        // Wait for visual spin
         await new Promise(resolve => setTimeout(resolve, 4000));
 
-        // Call secure RPC
         const { error } = await supabase.rpc('spin_mining_wheel');
         
         if (error) throw error;
         haptic.notification('success');
         await refreshProfile();
-    } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Spin failed';
+    } catch (err: any) {
+        let message = err instanceof Error ? err.message : 'Spin failed';
+        
+        // Translate errors
+        if (message.includes('cooldown') || message.includes('24 hours')) message = t('wait_24h');
+        else if (message.includes('Insufficient')) message = t('insufficient_balance');
+        else message = t('try_again');
+
         setErrorMsg(message);
         haptic.notification('error');
     } finally {
         setSpinning(false);
-        clearInterval(tickInterval); // Ensure interval is cleared
+        clearInterval(tickInterval);
     }
   };
 
@@ -130,9 +133,7 @@ export const MiningPage = () => {
         <p className="text-xs text-gray-400 mt-1">{t('mining_deposit_desc')}</p>
       </div>
 
-      {/* Professional Wheel Area */}
       <div className="relative flex justify-center py-6">
-        {/* Pointer */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 z-30 filter drop-shadow-lg">
            <ArrowDown className="text-white fill-white w-10 h-10" />
         </div>
@@ -154,15 +155,12 @@ export const MiningPage = () => {
             )`
           }}
         >
-           {/* Inner Circle */}
            <div className="absolute inset-4 rounded-full border border-white/10"></div>
            
-           {/* Center Hub */}
            <div className="z-20 bg-gradient-to-br from-gray-800 to-black w-20 h-20 rounded-full flex items-center justify-center border-4 border-gray-700 shadow-xl">
              <Coins className="text-yellow-500 w-8 h-8" />
            </div>
 
-           {/* Labels */}
            {!spinning && (
              <>
                <span className="absolute top-8 text-[10px] font-bold text-black transform -translate-x-1/2 left-1/2">WIN</span>
@@ -174,7 +172,6 @@ export const MiningPage = () => {
         </motion.div>
       </div>
 
-      {/* Controls */}
       <div className="space-y-4 max-w-sm mx-auto">
         {errorMsg && (
             <div className="bg-red-500/10 text-red-400 p-3 rounded-lg text-sm text-center">
@@ -214,7 +211,7 @@ export const MiningPage = () => {
                 disabled={!canSpin || spinning}
                 className="w-full py-4 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 rounded-xl font-bold text-lg text-black shadow-[0_0_20px_rgba(234,179,8,0.3)] disabled:opacity-50 disabled:grayscale transition-all active:scale-[0.98]"
               >
-                {spinning ? '...' : (canSpin ? t('spin') : '24h Cooldown')}
+                {spinning ? '...' : (canSpin ? t('spin') : t('wait_24h'))}
               </button>
               
               {!canSpin && (
@@ -222,14 +219,13 @@ export const MiningPage = () => {
               )}
             </div>
 
-            {/* Withdraw Deposit Button */}
             <button
               onClick={handleWithdrawDeposit}
               disabled={depositLocked || withdrawLoading}
               className="w-full flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm text-gray-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <LogOut size={16} />
-              {withdrawLoading ? 'Processing...' : depositLocked ? 'Deposit Locked (24h)' : 'Withdraw Deposit'}
+              {withdrawLoading ? t('processing') : depositLocked ? `${t('locked')} (24h)` : t('withdraw')}
             </button>
           </div>
         )}

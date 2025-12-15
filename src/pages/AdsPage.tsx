@@ -2,11 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
 import { useTelegram } from '../hooks/useTelegram';
-import { Play, AlertCircle, Loader2, Trophy, TrendingUp, Globe, ChevronDown, RefreshCw } from 'lucide-react';
+import { Play, AlertCircle, Loader2, Trophy, TrendingUp, Globe, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const AdsPage = () => {
-  const { profile, t, refreshProfile, language, setLanguage } = useApp();
+  const { profile, setProfile, t, refreshProfile, language, setLanguage } = useApp();
   const { haptic } = useTelegram();
   const [loadingAd, setLoadingAd] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -14,7 +14,6 @@ export const AdsPage = () => {
   const [earnedAmount, setEarnedAmount] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Ensure fresh data on mount
   useEffect(() => {
     refreshProfile();
   }, []);
@@ -30,7 +29,6 @@ export const AdsPage = () => {
 
   const currentReward = getRewardPerAd();
 
-  // Calculate progress to next level
   const getNextLevelInfo = () => {
     if (profile.vip_level >= 3) return { target: 50000, nextLvl: 'MAX', progress: 100 };
     
@@ -48,13 +46,15 @@ export const AdsPage = () => {
 
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
+    haptic.selection();
     await refreshProfile();
-    setTimeout(() => setIsRefreshing(false), 1000);
+    setTimeout(() => setIsRefreshing(false), 800);
   };
 
   const handleWatchAd = async () => {
     if (profile.ads_watched_today >= 5000) {
         setErrorMsg(t('daily_limit'));
+        haptic.notification('warning');
         return;
     }
     
@@ -63,53 +63,89 @@ export const AdsPage = () => {
     setErrorMsg('');
 
     try {
-        // 1. Show Ad (Monetag SDK)
         if (typeof window.show_10310779 === 'function') {
             await window.show_10310779().then(() => {
-                processReward();
+                // Ad finished, process reward
+                setTimeout(() => processReward(), 500);
             }).catch((err: any) => {
                 console.error("Ad closed/error:", err);
                 setLoadingAd(false);
             });
         } else {
-            // Fallback for development/testing
+            // Fallback for development or if adblocker is active
             console.warn("SDK not loaded, simulating ad...");
             setTimeout(() => processReward(), 2000);
         }
     } catch (e) {
         console.error("Ad Execution Error", e);
-        setErrorMsg('Failed to load ad provider.');
+        setErrorMsg(t('error'));
         setLoadingAd(false);
     }
   };
 
   const processReward = async () => {
     try {
-      // Call Secure RPC
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        throw new Error('session_expired');
+      }
+
       const { data, error } = await supabase.rpc('watch_ad');
 
-      if (error) throw error;
-      
-      // Check logic response
-      if (data && data.success === false) {
-          throw new Error(data.message || 'Failed to process reward');
+      if (error) {
+        throw new Error(error.message || 'connection_failed');
       }
+      
+      if (data && typeof data === 'object') {
+          if (data.success === false) {
+              throw new Error(data.message || 'reward_failed');
+          }
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Optimistic Update
+      setProfile((prev) => {
+        if (!prev) return null;
+        return {
+            ...prev,
+            balance: prev.balance + currentReward,
+            ads_watched: (prev.ads_watched || 0) + 1,
+            ads_watched_today: (prev.ads_watched_today || 0) + 1,
+            last_ad_reset_date: today
+        };
+      });
 
       haptic.notification('success');
       setEarnedAmount(currentReward);
       setShowSuccessModal(true);
       
-      // Sync with Server (The RPC returns new data, but refreshProfile ensures full sync)
-      await refreshProfile();
+      // Background refresh to sync with server
+      refreshProfile();
 
-      // Hide modal after delay
       setTimeout(() => setShowSuccessModal(false), 3000);
 
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error updating ad stats:', err);
       haptic.notification('error');
-      const msg = err instanceof Error ? err.message : 'Failed to process reward';
-      setErrorMsg(msg);
+      
+      let rawMsg = 'error';
+      if (err?.message) rawMsg = err.message;
+      if (typeof err === 'string') rawMsg = err;
+      
+      let displayMsg = rawMsg;
+      const lowerMsg = rawMsg.toLowerCase();
+
+      // Use centralized translations
+      if (lowerMsg.includes('daily limit')) displayMsg = t('daily_limit');
+      else if (lowerMsg.includes('session')) displayMsg = t('session_expired');
+      else if (lowerMsg.includes('too fast')) displayMsg = t('too_fast');
+      else if (lowerMsg.includes('connection')) displayMsg = t('error');
+      else if (lowerMsg.includes('reward_failed')) displayMsg = t('try_again');
+
+      setErrorMsg(displayMsg);
+      // Try to refresh profile to sync state in case of mismatch
+      refreshProfile();
     } finally {
       setLoadingAd(false);
     }
@@ -118,7 +154,6 @@ export const AdsPage = () => {
   return (
     <div className="flex flex-col h-full px-5 pt-4 pb-24 max-w-md mx-auto w-full font-sans">
       
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
          <h1 className="text-xl font-bold text-white tracking-tight">Earn cryptocurrency</h1>
          
@@ -129,7 +164,10 @@ export const AdsPage = () => {
             </button>
             <select 
                 value={language} 
-                onChange={(e) => setLanguage(e.target.value as any)}
+                onChange={(e) => {
+                    setLanguage(e.target.value as any);
+                    localStorage.setItem('app_lang', e.target.value);
+                }}
                 className="absolute inset-0 opacity-0 cursor-pointer"
             >
                 <option value="en">EN</option>
@@ -139,15 +177,12 @@ export const AdsPage = () => {
          </div>
       </div>
 
-      {/* Main Stats Card */}
       <div className="bg-[#111827] rounded-[32px] p-6 shadow-2xl border border-white/5 relative overflow-hidden mb-8">
-        {/* Background Glow */}
         <div className="absolute top-0 right-0 w-40 h-40 bg-cyan-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
 
-        {/* Balance Section */}
         <div className="flex justify-between items-start mb-8">
           <div>
-            <p className="text-gray-400 text-[11px] font-medium tracking-wider uppercase mb-1 opacity-80">BALANCE</p>
+            <p className="text-gray-400 text-[11px] font-medium tracking-wider uppercase mb-1 opacity-80">{t('balance')}</p>
             <h1 className="text-[40px] leading-none font-bold text-white tracking-tight">
               ${profile.balance.toFixed(5)}
             </h1>
@@ -166,11 +201,9 @@ export const AdsPage = () => {
           </div>
         </div>
 
-        {/* Sub Cards Grid */}
         <div className="grid grid-cols-2 gap-3 mb-6">
-          {/* Ads Today */}
           <div className="bg-[#1f2937] rounded-2xl p-4 border border-white/5 relative group hover:border-white/10 transition-colors">
-             <p className="text-gray-500 text-[11px] mb-2 font-medium">Ads Today</p>
+             <p className="text-gray-500 text-[11px] mb-2 font-medium">{t('ads_today')}</p>
              <div className="flex items-baseline gap-1">
                 <span className="text-white font-bold text-lg">/ 5000</span>
              </div>
@@ -179,9 +212,8 @@ export const AdsPage = () => {
              </div>
           </div>
 
-          {/* Ad Reward */}
           <div className="bg-[#1f2937] rounded-2xl p-4 border border-white/5 relative group hover:border-white/10 transition-colors">
-             <p className="text-gray-500 text-[11px] mb-2 font-medium">Ad Reward</p>
+             <p className="text-gray-500 text-[11px] mb-2 font-medium">{t('ad_reward')}</p>
              <div className="flex items-center gap-1.5">
                 <TrendingUp size={16} className="text-green-500" />
                 <span className="text-green-500 font-bold text-lg tracking-wide">
@@ -191,11 +223,10 @@ export const AdsPage = () => {
           </div>
         </div>
 
-        {/* Progress Bar */}
         <div>
            <div className="flex justify-between text-[10px] text-gray-500 mb-2 font-medium px-1">
-              <span>Ads Watched:</span>
-              <span>To Next Level {nextLevel.nextLvl} ({nextLevel.target})</span>
+              <span>{t('ads_watched')}:</span>
+              <span>{t('next_vip')} {nextLevel.nextLvl} ({nextLevel.target})</span>
            </div>
            <div className="h-1.5 bg-[#1f2937] rounded-full overflow-hidden">
               <motion.div 
@@ -210,36 +241,31 @@ export const AdsPage = () => {
         </div>
       </div>
 
-      {/* Error Message Container (Matches Screenshot Design) */}
-      <div className="mb-6 min-h-[48px]">
+      <div className="mb-6 min-h-[24px]">
         <AnimatePresence>
             {errorMsg && (
                 <motion.div 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    className="bg-[#2a1215] border border-red-900/50 rounded-xl p-3 flex items-center justify-center gap-2.5 text-red-400 text-sm font-medium shadow-lg"
+                    className="bg-[#2a1215] border border-red-900/50 rounded-xl p-3 flex items-center justify-center gap-2 text-red-400 text-sm font-medium shadow-lg text-center"
                 >
-                    <AlertCircle size={18} />
-                    {errorMsg}
+                    <AlertCircle size={18} className="shrink-0" />
+                    <span>{errorMsg}</span>
                 </motion.div>
             )}
         </AnimatePresence>
       </div>
 
-      {/* Big Circular Watch Button (Matches Screenshot) */}
       <div className="flex-1 flex items-center justify-center relative pb-8">
-         {/* Outer Glow Rings */}
          <div className="absolute w-[280px] h-[280px] bg-blue-600/5 rounded-full blur-3xl pointer-events-none"></div>
          <div className="absolute w-[240px] h-[240px] border border-blue-500/10 rounded-full"></div>
          
-         {/* The Button */}
          <button
             onClick={handleWatchAd}
             disabled={loadingAd || profile.ads_watched_today >= 5000}
             className="relative w-56 h-56 rounded-full bg-gradient-to-b from-[#3b82f6] to-[#2563eb] shadow-[0_10px_40px_-10px_rgba(37,99,235,0.5)] flex flex-col items-center justify-center group transition-all active:scale-95 disabled:opacity-80 disabled:grayscale disabled:shadow-none z-10"
          >
-            {/* Inner Top Highlight */}
             <div className="absolute top-0 inset-x-0 h-1/2 rounded-t-full bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
             
             {loadingAd ? (
@@ -249,7 +275,7 @@ export const AdsPage = () => {
                     <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mb-4 shadow-lg group-hover:scale-105 transition-transform">
                         <Play size={32} className="text-blue-600 fill-blue-600 ml-1.5" />
                     </div>
-                    <span className="text-white font-bold text-xl drop-shadow-md tracking-wide">Watch Ad</span>
+                    <span className="text-white font-bold text-xl drop-shadow-md tracking-wide">{t('watch_ad')}</span>
                     <div className="bg-black/20 px-4 py-1.5 rounded-full mt-3 backdrop-blur-sm border border-white/10">
                         <span className="text-white text-sm font-medium tracking-wider">+ ${currentReward}</span>
                     </div>
@@ -258,7 +284,6 @@ export const AdsPage = () => {
          </button>
       </div>
 
-      {/* Success Modal / Toast */}
       <AnimatePresence>
         {showSuccessModal && (
             <motion.div 
@@ -268,10 +293,10 @@ export const AdsPage = () => {
                 className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-[#111827] border border-green-500/20 shadow-[0_0_40px_rgba(34,197,94,0.15)] px-6 py-4 rounded-2xl flex items-center gap-4 z-50 w-[90%] max-w-xs"
             >
                 <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center shrink-0 border border-green-500/20">
-                    <TrendingUp size={20} className="text-green-500" />
+                    <CheckCircle2 size={24} className="text-green-500" />
                 </div>
                 <div>
-                    <h4 className="text-white font-bold text-sm">Reward Received</h4>
+                    <h4 className="text-white font-bold text-sm">{t('success')}</h4>
                     <p className="text-green-500 text-xs font-mono mt-0.5">+ ${earnedAmount} added</p>
                 </div>
             </motion.div>

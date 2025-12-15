@@ -11,6 +11,10 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
+        // Force new filenames to bust cache
+        entryFileNames: `assets/[name].[hash].${Date.now()}.js`,
+        chunkFileNames: `assets/[name].[hash].${Date.now()}.js`,
+        assetFileNames: `assets/[name].[hash].${Date.now()}.[ext]`,
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom', 'framer-motion'],
           supabase: ['@supabase/supabase-js'],
